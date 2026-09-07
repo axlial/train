@@ -51,109 +51,129 @@
     }
 
     /* =========================================================================
-       ПРОЗРАЧНЫЙ СЕНСОРНЫЙ HUD ДЛЯ СМАРТФОНОВ
+       ПРОЗРАЧНЫЙ СЕНСОРНЫЙ HUD ДЛЯ СМАРТФОНОВ (ANDROID STYLE)
        ========================================================================= */
     #mobile-hud {
       position: absolute;
       inset: 0;
-      pointer-events: none; /* Клики сквозь пустые места */
-      z-index: 20;
+      pointer-events: none;
+      z-index: 30;
     }
 
+    /* Базовый стиль полупрозрачной кнопки */
     .hud-btn {
-      position: absolute;
-      pointer-events: auto;
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      border: 1.5px solid rgba(255, 255, 255, 0.25);
-      background: rgba(18, 24, 34, 0.35);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      color: #fff;
       border-radius: 50%;
+      color: #ffffff;
       touch-action: manipulation;
       cursor: pointer;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-      transition: background 0.1s, transform 0.08s, border-color 0.1s;
+      pointer-events: auto;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+      transition: transform 0.08s, background 0.1s, border-color 0.1s;
     }
 
     .hud-btn:active, .hud-btn.pressed {
       transform: scale(0.92);
-      background: rgba(255, 255, 255, 0.28);
-      border-color: rgba(255, 255, 255, 0.8);
+      filter: brightness(1.25);
     }
 
-    /* Верхние системные кнопки */
-    #btn-fullscreen {
-      top: env(safe-area-inset-top, 14px);
-      left: env(safe-area-inset-left, 16px);
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      font-size: 20px;
+    /* Иконки и подписи на кнопках */
+    .btn-icon {
+      font-size: 26px;
+      line-height: 1;
+      font-weight: bold;
+      pointer-events: none;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
     }
 
-    #btn-reset {
-      top: env(safe-area-inset-top, 14px);
-      right: env(safe-area-inset-right, 16px);
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      font-size: 20px;
+    .btn-lbl {
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      margin-top: 3px;
+      pointer-events: none;
+      opacity: 0.95;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
     }
 
-    /* Блок управления движением под левый палец */
-    .motion-group {
+    /* Верхние сервисные кнопки (по углам) */
+    .controls-top-left {
       position: absolute;
-      bottom: calc(env(safe-area-inset-bottom, 12px) + 14px);
-      left: calc(env(safe-area-inset-left, 12px) + 18px);
-      display: flex;
-      gap: 16px;
+      top: max(12px, env(safe-area-inset-top, 12px));
+      left: max(16px, env(safe-area-inset-left, 16px));
       pointer-events: auto;
     }
 
-    .btn-drive {
-      width: 72px;
-      height: 72px;
-      font-size: 24px;
-      font-weight: bold;
+    .controls-top-right {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top, 12px));
+      right: max(16px, env(safe-area-inset-right, 16px));
+      pointer-events: auto;
     }
 
-    .btn-drive span {
-      font-size: 9px;
-      letter-spacing: 0.5px;
-      margin-top: 2px;
-      opacity: 0.8;
-      font-weight: 600;
-    }
-
-    /* Кнопка тормоза под правый палец */
-    #btn-brake {
-      bottom: calc(env(safe-area-inset-bottom, 12px) + 14px);
-      right: calc(env(safe-area-inset-right, 12px) + 20px);
-      width: 80px;
-      height: 80px;
-      background: rgba(185, 30, 30, 0.38);
-      border-color: rgba(255, 110, 110, 0.45);
+    .btn-top {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: rgba(25, 32, 45, 0.65);
+      border: 1.5px solid rgba(255, 255, 255, 0.35);
       font-size: 20px;
-      font-weight: bold;
     }
 
-    #btn-brake span {
-      font-size: 10px;
-      letter-spacing: 0.5px;
-      margin-top: 2px;
-      font-weight: 600;
+    /* =========================================================================
+       НИЖНИЙ РЯД КНОПОК: ЛЕВЫЕ (НАЗАД / ВПЕРЕД) И ПРАВАЯ (ТОРМОЗ)
+       СТРОГО НА ОДНОМ ГОРИЗОНТАЛЬНОМ УРОВНЕ
+       ========================================================================= */
+    .controls-bottom-left {
+      position: absolute;
+      bottom: max(18px, env(safe-area-inset-bottom, 18px));
+      left: max(18px, env(safe-area-inset-left, 18px));
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      pointer-events: auto;
     }
 
-    #btn-brake:active, #btn-brake.pressed {
-      background: rgba(230, 35, 35, 0.65);
-      border-color: #fff;
+    .controls-bottom-right {
+      position: absolute;
+      bottom: max(18px, env(safe-area-inset-bottom, 18px));
+      right: max(18px, env(safe-area-inset-right, 18px));
+      display: flex;
+      align-items: center;
+      pointer-events: auto;
     }
 
-    /* Подсказка повернуть экран на мобильных */
+    /* Кнопки движения: контрастный полупрозрачный синий */
+    .btn-drive {
+      width: 76px;
+      height: 76px;
+      background: rgba(22, 72, 138, 0.68);
+      border: 2px solid rgba(150, 205, 255, 0.55);
+    }
+    .btn-drive:active, .btn-drive.pressed {
+      background: rgba(35, 115, 215, 0.9);
+      border-color: #ffffff;
+    }
+
+    /* Кнопка тормоза: контрастный полупрозрачный красный */
+    .btn-brake {
+      width: 76px;
+      height: 76px;
+      background: rgba(185, 28, 28, 0.72);
+      border: 2px solid rgba(255, 130, 130, 0.65);
+    }
+    .btn-brake:active, .btn-brake.pressed {
+      background: rgba(235, 35, 35, 0.95);
+      border-color: #ffffff;
+    }
+
+    /* Предупреждение о повороте экрана */
     #rotate-hint {
       display: none;
       position: absolute;
@@ -193,20 +213,38 @@
 <div id="game-container">
   <canvas id="gameCanvas" width="1380" height="720"></canvas>
 
-  <!-- Полупрозрачные элементы управления для пальцев -->
+  <!-- Сенсорный HUD для пальцев -->
   <div id="mobile-hud">
-    <button class="hud-btn" id="btn-fullscreen" title="На весь экран">⛶</button>
-    <button class="hud-btn" id="btn-reset" title="Сбросить / Заново">⟲</button>
-
-    <div class="motion-group">
-      <button class="hud-btn btn-drive" id="btn-left">◀<span>НАЗАД</span></button>
-      <button class="hud-btn btn-drive" id="btn-right">▶<span>ВПЕРЕД</span></button>
+    <!-- Верхние углы -->
+    <div class="controls-top-left">
+      <button class="hud-btn btn-top" id="btn-fullscreen" title="На весь экран">⛶</button>
+    </div>
+    <div class="controls-top-right">
+      <button class="hud-btn btn-top" id="btn-reset" title="Сбросить / Заново">⟲</button>
     </div>
 
-    <button class="hud-btn" id="btn-brake">■<span>ТОРМОЗ</span></button>
+    <!-- Левые кнопки движения (строго на одной высоте с тормозом) -->
+    <div class="controls-bottom-left">
+      <button class="hud-btn btn-drive" id="btn-left">
+        <span class="btn-icon">◀</span>
+        <span class="btn-lbl">НАЗАД</span>
+      </button>
+      <button class="hud-btn btn-drive" id="btn-right">
+        <span class="btn-icon">▶</span>
+        <span class="btn-lbl">ВПЕРЕД</span>
+      </button>
+    </div>
+
+    <!-- Правая кнопка тормоза (на той же высоте) -->
+    <div class="controls-bottom-right">
+      <button class="hud-btn btn-brake" id="btn-brake">
+        <span class="btn-icon">■</span>
+        <span class="btn-lbl">ТОРМОЗ</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Оповещение при вертикальном положении телефона -->
+  <!-- Подсказка для поворота смартфона -->
   <div id="rotate-hint">
     <svg viewBox="0 0 24 24">
       <path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm1 18H7V5h10v14z"/>
@@ -230,7 +268,7 @@ const COL_RED = "rgb(235, 30, 30)";
 
 // Пути (0 — верх экрана):
 const TRACK_Y = {
-  5: 230,  // Путь 5 (у перрона): полувагоны
+  5: 230,  // Путь 5 (у платформы): полувагоны
   3: 315,  // Путь 3: тепловоз, сборка
   1: 400,  // Путь I: экспрессы, переезд
   4: 485   // Путь 4 (внизу): цистерны
@@ -251,7 +289,6 @@ const SWITCH_X_END   = { 3: 1040, 5: 1070, 4: 1080 };
 const MAX_SWITCH_END = 1080;
 const X_M8_POS = 1110;
 
-// Геометрия дуг стрелок
 function getTrackYAndAngle(x, trackId) {
   if (trackId === 1) return { y: TRACK_Y[1], angle: 0.0 };
 
@@ -312,7 +349,7 @@ function findTrailingCarX(leadX, trackId, targetDist = 76.0) {
 // =============================================================================
 class RoadCar {
   constructor(dir) {
-    this.dir = dir; // 1: едет вниз, -1: едет вверх
+    this.dir = dir;
     this.width = 16;
     this.length = 26 + Math.random() * 8;
     this.laneX = dir === 1 ? ROAD_X - 11 : ROAD_X + 11;
@@ -836,7 +873,7 @@ class PassengerExpress {
 }
 
 // =============================================================================
-// ОСНОВНАЯ ЛОГИКА
+// ДВИЖОК
 // =============================================================================
 class StationGame {
   constructor(canvas) {
@@ -885,14 +922,13 @@ class StationGame {
       this.keysHeld.delete(e.code);
     });
 
-    // Привязка мобильных прозрачных кнопок (с поддержкой виброотклика Android)
     const bindBtn = (id, code) => {
       const el = document.getElementById(id);
       if (!el) return;
 
       const triggerVibrate = () => {
         if ("vibrate" in navigator) {
-          try { navigator.vibrate(18); } catch (e) {}
+          try { navigator.vibrate(20); } catch (e) {}
         }
       };
 
@@ -931,7 +967,6 @@ class StationGame {
       resetEl.addEventListener("touchstart", doReset, { passive: false });
     }
 
-    // Кнопка Fullscreen
     const fsEl = document.getElementById("btn-fullscreen");
     if (fsEl) {
       const toggleFs = (ev) => {
@@ -1321,7 +1356,7 @@ class StationGame {
     ctx.fillStyle = "#fff0b4";
     ctx.beginPath(); ctx.arc(650, 138, 4, 0, Math.PI * 2); ctx.fill();
 
-    // Балласт и рельсы
+    // Балласт и пути
     const colBallast = "#413c37";
     const colSleeper = "#201812";
     const colRailShadow = "#19191c";
@@ -1438,7 +1473,7 @@ class StationGame {
     this.worker.draw(ctx);
     this.attendant.draw(ctx);
 
-    // Панель заданий
+    // Панель заданий (текст слегка сдвинут вправо, чтобы кнопки его не загораживали)
     ctx.fillStyle = "rgba(16, 20, 26, 0.92)";
     ctx.strokeStyle = "#3c4655";
     ctx.lineWidth = 2;
@@ -1448,16 +1483,16 @@ class StationGame {
     ctx.textAlign = "left";
     ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = "#ffd700";
-    ctx.fillText(`ЗАДАНИЕ: ${this.status}`, 50, SCREEN_HEIGHT - 55);
+    ctx.fillText(`ЗАДАНИЕ: ${this.status}`, 190, SCREEN_HEIGHT - 55);
 
     if (this.alarmMsg) {
       ctx.font = "bold 12px sans-serif";
       ctx.fillStyle = "#ff3232";
-      ctx.fillText(this.alarmMsg, 50, SCREEN_HEIGHT - 28);
+      ctx.fillText(this.alarmMsg, 190, SCREEN_HEIGHT - 28);
     } else {
       ctx.font = "12px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("[Стрелки / A, D] — Тяга  |  [Пробел] — Тормоз  |  [R] — Заново", 50, SCREEN_HEIGHT - 28);
+      ctx.fillText("[Кнопки экрана / Клавиатура: A, D, Пробел, R] — Управление поездом", 190, SCREEN_HEIGHT - 28);
     }
 
     // Экран победы
