@@ -1,0 +1,1382 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Станция Якубовка — Симулятор маневров</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body {
+      background-color: #111418;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+    }
+    #game-wrapper {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      max-width: 1380px;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      max-height: calc(100vh - 85px);
+      aspect-ratio: 1380 / 720;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+      background-color: #244b16;
+      display: block;
+    }
+    /* Сенсорная панель управления для смартфонов */
+    #mobile-controls {
+      display: flex;
+      width: 100%;
+      max-width: 900px;
+      height: 75px;
+      gap: 12px;
+      padding: 8px 14px;
+      justify-content: center;
+      align-items: center;
+      background: rgba(18, 22, 28, 0.95);
+      border-top: 1px solid #323d4f;
+    }
+    .touch-btn {
+      flex: 1;
+      height: 100%;
+      max-width: 220px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      touch-action: manipulation;
+      transition: transform 0.05s, filter 0.1s;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+    }
+    .touch-btn:active {
+      transform: scale(0.96);
+      filter: brightness(1.25);
+    }
+    .btn-left { background: #2b5c8f; border-bottom: 4px solid #1c3c5e; }
+    .btn-brake { background: #b33939; border-bottom: 4px solid #782323; }
+    .btn-right { background: #2b5c8f; border-bottom: 4px solid #1c3c5e; }
+    .btn-restart { background: #47535e; border-bottom: 4px solid #2f373e; max-width: 120px; font-size: 14px; }
+
+    @media (min-width: 1025px) {
+      #mobile-controls {
+        height: 60px;
+        padding: 6px 10px;
+      }
+      .touch-btn {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-wrapper">
+  <canvas id="gameCanvas" width="1380" height="720"></canvas>
+  <div id="mobile-controls">
+    <button class="touch-btn btn-left" id="btn-left">◀ НАЗАД [A]</button>
+    <button class="touch-btn btn-brake" id="btn-brake">■ ТОРМОЗ</button>
+    <button class="touch-btn btn-right" id="btn-right">ВПЕРЕД ▶ [D]</button>
+    <button class="touch-btn btn-restart" id="btn-reset">⟲ СБРОС</button>
+  </div>
+</div>
+
+<script>
+// =============================================================================
+// КОНСТАНТЫ И ПАРАМЕТРЫ СТАНЦИИ
+// =============================================================================
+const SCREEN_WIDTH = 1380;
+const SCREEN_HEIGHT = 720;
+
+const COL_BLUE = "rgb(30, 140, 255)";
+const COL_WHITE = "rgb(245, 250, 255)";
+const COL_YELLOW = "rgb(255, 215, 0)";
+const COL_RED = "rgb(235, 30, 30)";
+
+// Координаты путей по оси Y (0 - верх экрана, станция вверху):
+const TRACK_Y = {
+  5: 230,  // Путь 5 (вверху, у платформы вокзала): полувагоны с углем
+  3: 315,  // Путь 3: тепловоз, сборка состава
+  1: 400,  // Путь I: главный сквозной ход экспрессов с переездом
+  4: 485   // Путь 4 (внизу): цистерны
+};
+
+const TRACK_NAMES = {
+  5: "Путь 5",
+  3: "Путь 3",
+  1: "Путь I",
+  4: "Путь 4"
+};
+
+const X_STATION_LEFT = 250;
+const ROAD_X = 110;
+
+const SWITCH_X_START = { 3: 870, 5: 870, 4: 940 };
+const SWITCH_X_END   = { 3: 1040, 5: 1070, 4: 1080 };
+const MAX_SWITCH_END = 1080;
+const X_M8_POS = 1110;
+
+// =============================================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ГЕОМЕТРИИ ПУТЕЙ
+// =============================================================================
+function getTrackYAndAngle(x, trackId) {
+  if (trackId === 1) return { y: TRACK_Y[1], angle: 0.0 };
+
+  const xStart = SWITCH_X_START[trackId];
+  const xEnd = SWITCH_X_END[trackId];
+  const yStart = TRACK_Y[trackId];
+  const yEnd = TRACK_Y[1];
+
+  if (x <= xStart) return { y: yStart, angle: 0.0 };
+  if (x >= xEnd)   return { y: yEnd, angle: 0.0 };
+
+  const dx = xEnd - xStart;
+  const dy = yEnd - yStart;
+  const sgn = dy > 0 ? 1.0 : -1.0;
+  const absDy = Math.abs(dy);
+
+  const R = (dx * dx + absDy * absDy) / (4.0 * absDy);
+  const xMid = xStart + dx * 0.5;
+
+  let y, slope;
+  if (x <= xMid) {
+    const u = x - xStart;
+    const radTerm = Math.max(0.0, R * R - u * u);
+    y = yStart + sgn * (R - Math.sqrt(radTerm));
+    slope = sgn * (u / Math.max(0.001, Math.sqrt(radTerm)));
+  } else {
+    const u = xEnd - x;
+    const radTerm = Math.max(0.0, R * R - u * u);
+    y = yEnd - sgn * (R - Math.sqrt(radTerm));
+    slope = sgn * (u / Math.max(0.001, Math.sqrt(radTerm)));
+  }
+
+  return { y: y, angle: Math.atan(slope) };
+}
+
+function findTrailingCarX(leadX, trackId, targetDist = 76.0) {
+  let low = leadX - targetDist - 6.0;
+  let high = leadX - 30.0;
+  for (let iter = 0; iter < 8; iter++) {
+    const mid = (low + high) * 0.5;
+    const step = (leadX - mid) * 0.25;
+    let arcLen = 0.0;
+    for (let s = 0; s < 4; s++) {
+      const x1 = mid + s * step;
+      const x2 = x1 + step;
+      const y1 = getTrackYAndAngle(x1, trackId).y;
+      const y2 = getTrackYAndAngle(x2, trackId).y;
+      arcLen += Math.hypot(step, y2 - y1);
+    }
+    if (arcLen > targetDist) low = mid;
+    else high = mid;
+  }
+  return (low + high) * 0.5;
+}
+
+// =============================================================================
+// МАШИНЫ НА АВТОДОРОГЕ
+// =============================================================================
+class RoadCar {
+  constructor(dir) {
+    this.dir = dir; // 1: едет сверху вниз (на юг), -1: едет снизу вверх (на север)
+    this.width = 16;
+    this.length = 26 + Math.random() * 8;
+    this.laneX = dir === 1 ? ROAD_X - 11 : ROAD_X + 11;
+    this.y = dir === 1 ? -40 : SCREEN_HEIGHT + 40;
+    this.maxSpeed = 80 + Math.random() * 30;
+    this.speed = this.maxSpeed;
+
+    const carColors = ["#d93b3b", "#3b6ed9", "#d9a83b", "#e0e0e0", "#2c2c2c", "#2ea859", "#8d44ad"];
+    this.color = carColors[Math.floor(Math.random() * carColors.length)];
+  }
+
+  update(dt, barrierClosed, carAhead) {
+    const stopY = this.dir === 1 ? (TRACK_Y[1] - 46) : (TRACK_Y[1] + 46);
+    let targetSpeed = this.maxSpeed;
+
+    if (barrierClosed) {
+      if (this.dir === 1 && this.y < stopY && this.y > stopY - 140) {
+        const dist = stopY - this.y;
+        targetSpeed = Math.min(targetSpeed, Math.max(0, dist * 1.5));
+      } else if (this.dir === -1 && this.y > stopY && this.y < stopY + 140) {
+        const dist = this.y - stopY;
+        targetSpeed = Math.min(targetSpeed, Math.max(0, dist * 1.5));
+      }
+    }
+
+    if (carAhead) {
+      const distToLeader = this.dir === 1 ? (carAhead.y - this.y) : (this.y - carAhead.y);
+      const safeDist = this.length + 14;
+      if (distToLeader < safeDist + 70 && distToLeader > 0) {
+        const followSpeed = Math.max(0, (distToLeader - safeDist) * 1.8);
+        targetSpeed = Math.min(targetSpeed, followSpeed);
+      }
+    }
+
+    if (this.speed < targetSpeed) {
+      this.speed = Math.min(this.speed + 110 * dt, targetSpeed);
+    } else {
+      this.speed = Math.max(this.speed - 220 * dt, targetSpeed);
+    }
+
+    this.y += this.speed * this.dir * dt;
+  }
+
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.laneX, this.y);
+
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.roundRect(-this.width / 2, -this.length / 2, this.width, this.length, 4);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(20, 25, 35, 0.85)";
+    ctx.fillRect(-this.width / 2 + 2, -this.length / 2 + 5, this.width - 4, this.length - 10);
+
+    const frontY = this.dir === 1 ? this.length / 2 : -this.length / 2;
+    ctx.fillStyle = "#fffca8";
+    ctx.fillRect(-this.width / 2 + 2, frontY - (this.dir === 1 ? 2 : 0), 3, 2);
+    ctx.fillRect(this.width / 2 - 5, frontY - (this.dir === 1 ? 2 : 0), 3, 2);
+
+    const rearY = this.dir === 1 ? -this.length / 2 : this.length / 2;
+    ctx.fillStyle = "#ff2222";
+    ctx.fillRect(-this.width / 2 + 2, rearY - (this.dir === 1 ? 0 : 2), 3, 2);
+    ctx.fillRect(this.width / 2 - 5, rearY - (this.dir === 1 ? 0 : 2), 3, 2);
+
+    ctx.restore();
+  }
+}
+
+// =============================================================================
+// ПЕРЕЕЗД
+// =============================================================================
+class LevelCrossing {
+  constructor(x, trackY) {
+    this.x = x;
+    this.trackY = trackY;
+    this.barrierState = 1.0;
+    this.isClosed = false;
+    this.blinkTimer = 0.0;
+  }
+
+  update(dt, expressActive, expressX) {
+    this.isClosed = expressActive && (expressX >= -750 && expressX <= 600);
+    this.blinkTimer += dt;
+
+    if (this.isClosed) {
+      this.barrierState = Math.max(0.0, this.barrierState - dt * 0.30);
+    } else {
+      this.barrierState = Math.min(1.0, this.barrierState + dt * 0.30);
+    }
+  }
+
+  draw(ctx) {
+    this._drawGate(ctx, this.x + 22, this.trackY - 24, true);
+    this._drawGate(ctx, this.x - 22, this.trackY + 24, false);
+  }
+
+  _drawGate(ctx, sx, sy, isNorth) {
+    ctx.strokeStyle = "#464b55";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 14);
+    ctx.lineTo(sx, sy + 14);
+    ctx.stroke();
+
+    const headY = isNorth ? sy - 12 : sy + 12;
+    ctx.fillStyle = "#141418";
+    ctx.strokeStyle = "#78787d";
+    ctx.lineWidth = 1;
+    ctx.fillRect(sx - 9, headY - 5, 18, 10);
+    ctx.strokeRect(sx - 9, headY - 5, 18, 10);
+
+    const whiteY = isNorth ? headY - 7 : headY + 7;
+    ctx.fillRect(sx - 4, whiteY - 4, 8, 8);
+    ctx.strokeRect(sx - 4, whiteY - 4, 8, 8);
+
+    if (this.isClosed) {
+      const leftOn = Math.floor(this.blinkTimer * 2.2) % 2 === 0;
+      ctx.fillStyle = leftOn ? COL_RED : "#3c0f0f";
+      ctx.beginPath(); ctx.arc(sx - 4.5, headY, 3, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = !leftOn ? COL_RED : "#3c0f0f";
+      ctx.beginPath(); ctx.arc(sx + 4.5, headY, 3, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = "#282d32";
+      ctx.beginPath(); ctx.arc(sx, whiteY, 2.5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = "#3c0f0f";
+      ctx.beginPath(); ctx.arc(sx - 4.5, headY, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 4.5, headY, 3, 0, Math.PI * 2); ctx.fill();
+
+      const whiteOn = Math.floor(this.blinkTimer * 1.5) % 2 === 0;
+      ctx.fillStyle = whiteOn ? COL_WHITE : "#282d32";
+      ctx.beginPath(); ctx.arc(sx, whiteY, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    const baseY = isNorth ? sy + 4 : sy - 4;
+    const angleDeg = isNorth ? (-180.0 + 95.0 * this.barrierState) : (-95.0 * this.barrierState);
+    const rad = angleDeg * Math.PI / 180.0;
+    const armLen = 36.0;
+    const ex = sx + armLen * Math.cos(rad);
+    const ey = baseY + armLen * Math.sin(rad);
+
+    ctx.strokeStyle = "#f5f5fa";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(sx, baseY);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#e11e1e";
+    for (let t of [0.25, 0.55, 0.85]) {
+      const p1x = sx + (armLen * (t - 0.08)) * Math.cos(rad);
+      const p1y = baseY + (armLen * (t - 0.08)) * Math.sin(rad);
+      const p2x = sx + (armLen * t) * Math.cos(rad);
+      const p2y = baseY + (armLen * t) * Math.sin(rad);
+      ctx.beginPath();
+      ctx.moveTo(p1x, p1y);
+      ctx.lineTo(p2x, p2y);
+      ctx.stroke();
+    }
+  }
+}
+
+// =============================================================================
+// ПЕРСОНАЖИ СТАНЦИИ
+// =============================================================================
+class StationAttendant {
+  constructor(startPos) {
+    this.x = startPos[0];
+    this.y = startPos[1];
+    this.targetX = 610;
+    this.targetY = 172; // На платформе у края Пути 5
+    this.active = false;
+    this.signalRaised = false;
+    this.walkAnim = 0;
+  }
+
+  update(dt) {
+    if (!this.active) return;
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 1.5) {
+      const speed = 36.0;
+      this.x += (dx / dist) * speed * dt;
+      this.y += (dy / dist) * speed * dt;
+      this.walkAnim += dt * 8;
+    } else {
+      this.signalRaised = true;
+    }
+  }
+
+  draw(ctx) {
+    if (!this.active) return;
+    const bob = Math.sin(this.walkAnim) * 1.5;
+    const py = this.y + (this.signalRaised ? 0 : bob);
+
+    ctx.fillStyle = "#191e2d";
+    ctx.fillRect(this.x - 3, py + 3, 6, 6);
+    ctx.fillStyle = "#14234b";
+    ctx.fillRect(this.x - 3, py - 6, 6, 9);
+    ctx.fillStyle = "#f0d2b9";
+    ctx.beginPath(); ctx.arc(this.x, py - 9, 3.5, 0, Math.PI * 2); ctx.fill();
+
+    // Красная фуражка ДСП
+    ctx.fillStyle = "#d71919";
+    ctx.fillRect(this.x - 4, py - 13, 8, 3.5);
+    ctx.strokeStyle = "#0f0f14"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(this.x - 4, py - 9.5); ctx.lineTo(this.x + 4, py - 9.5); ctx.stroke();
+
+    if (this.signalRaised) {
+      ctx.strokeStyle = "#14234b"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(this.x + 2, py - 2); ctx.lineTo(this.x + 8, py - 12); ctx.stroke();
+      ctx.strokeStyle = "#1e1e23";
+      ctx.beginPath(); ctx.moveTo(this.x + 8, py - 12); ctx.lineTo(this.x + 13, py - 18); ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(this.x + 13, py - 18, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#1ecd3c";
+      ctx.beginPath(); ctx.arc(this.x + 13, py - 18, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+class InspectorWorker {
+  constructor(pos) {
+    this.x = pos[0];
+    this.y = pos[1];
+    this.active = false;
+    this.finished = false;
+    this.walkAnim = 0;
+  }
+
+  update(tx, ty, dt) {
+    if (!this.active || this.finished) return;
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist > 1.5) {
+      const speed = 38.0;
+      this.x += (dx / dist) * speed * dt;
+      this.y += (dy / dist) * speed * dt;
+      this.walkAnim += dt * 8;
+    } else {
+      this.finished = true;
+    }
+  }
+
+  draw(ctx) {
+    if (!this.active) return;
+    const bob = this.finished ? 0 : Math.sin(this.walkAnim) * 1.5;
+    const py = this.y + bob;
+
+    ctx.fillStyle = "#1e2d50";
+    ctx.fillRect(this.x - 3, py + 3, 6, 6);
+    ctx.fillStyle = "#ff7800";
+    ctx.fillRect(this.x - 3, py - 6, 6, 9);
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.arc(this.x, py - 9, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// =============================================================================
+// СВЕТОФОРЫ
+// =============================================================================
+class DwarfSignal {
+  constructor(name, trackId, x, isFacingRight = true) {
+    this.name = name;
+    this.trackId = trackId;
+    this.x = x;
+    this.isFacingRight = isFacingRight;
+    this.isWhite = false;
+    this.isYellow = false;
+  }
+
+  draw(ctx) {
+    const yTrack = TRACK_Y[this.trackId];
+    // Светофор справа по ходу движения
+    const sy = this.isFacingRight ? yTrack + 21 : yTrack - 21;
+
+    ctx.fillStyle = "#141418";
+    ctx.strokeStyle = "#828287";
+    ctx.lineWidth = 1;
+    ctx.fillRect(this.x - 5, sy - 7, 10, 14);
+    ctx.strokeRect(this.x - 5, sy - 7, 10, 14);
+
+    ctx.strokeStyle = "#0a0a0c";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(this.x - 5, sy - 7);
+    ctx.lineTo(this.x + 5, sy - 7);
+    ctx.stroke();
+
+    let col = COL_BLUE;
+    if (this.isYellow) col = COL_YELLOW;
+    else if (this.isWhite) col = COL_WHITE;
+
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(this.x, sy, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    const textY = this.isFacingRight ? sy + 18 : sy - 10;
+    ctx.fillStyle = "#dcdee0";
+    ctx.font = "bold 9px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText(this.name, this.x, textY);
+  }
+}
+
+// =============================================================================
+// ПОДВИЖНОЙ СОСТАВ
+// =============================================================================
+class DetailedTrainCar {
+  constructor(kind, trackId, x) {
+    this.kind = kind;
+    this.trackId = trackId;
+    this.x = x;
+    this.length = 76;
+    this.hasTailSign = false;
+  }
+
+  draw(ctx) {
+    const { y, angle } = getTrackYAndAngle(this.x, this.trackId);
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const w = this.length;
+    const h = 24;
+
+    const toW = (lx, ly) => [
+      this.x + lx * cosA - ly * sinA,
+      y + lx * sinA + ly * cosA
+    ];
+
+    // СА-3
+    ctx.strokeStyle = "#1e1e23";
+    ctx.lineWidth = 4;
+    for (let sx of [-w / 2 - 3, w / 2 + 3]) {
+      const c1 = toW(sx - 2, -3);
+      const c2 = toW(sx + 2, 3);
+      ctx.beginPath(); ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c2[0], c2[1]); ctx.stroke();
+    }
+
+    // Тележки
+    ctx.fillStyle = "#161619";
+    for (let bx of [-w / 2 + 13, w / 2 - 13]) {
+      const t1 = toW(bx - 7, -13), t2 = toW(bx + 7, -13);
+      const t3 = toW(bx + 7, 13), t4 = toW(bx - 7, 13);
+      ctx.beginPath();
+      ctx.moveTo(t1[0], t1[1]); ctx.lineTo(t2[0], t2[1]);
+      ctx.lineTo(t3[0], t3[1]); ctx.lineTo(t4[0], t4[1]);
+      ctx.closePath(); ctx.fill();
+    }
+
+    const p1 = toW(-w / 2, -h / 2), p2 = toW(w / 2, -h / 2);
+    const p3 = toW(w / 2, h / 2), p4 = toW(-w / 2, h / 2);
+
+    const drawPoly = (pts, fill, stroke = null, strokeW = 1) => {
+      ctx.beginPath();
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+      ctx.closePath();
+      if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+      if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = strokeW; ctx.stroke(); }
+    };
+
+    if (this.kind === "loco") {
+      drawPoly([p1, p2, p3, p4], "#207330", "#0f3716", 2);
+      const k1 = toW(-w / 2 + 3, -h / 2 + 3), k2 = toW(w / 2 - 3, -h / 2 + 3);
+      const k3 = toW(w / 2 - 3, h / 2 - 3), k4 = toW(-w / 2 + 3, h / 2 - 3);
+      drawPoly([k1, k2, k3, k4], "#1a5f28");
+
+      const cab1 = toW(-10, -h / 2 + 1), cab2 = toW(13, -h / 2 + 1);
+      const cab3 = toW(13, h / 2 - 1), cab4 = toW(-10, h / 2 - 1);
+      drawPoly([cab1, cab2, cab3, cab4], "#145020", "#0c3214", 1.5);
+
+      drawPoly([toW(-8, -h / 2 + 3), toW(11, -h / 2 + 3), toW(11, -h / 2 + 7), toW(-8, -h / 2 + 7)], "#aae1f5");
+      drawPoly([toW(-8, h / 2 - 7), toW(11, h / 2 - 7), toW(11, h / 2 - 3), toW(-8, h / 2 - 3)], "#aae1f5");
+
+      ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 2.5;
+      const s1 = toW(-w / 2 + 5, 0), s2 = toW(-w / 2 + 17, 0);
+      ctx.beginPath(); ctx.moveTo(s1[0], s1[1]); ctx.lineTo(s2[0], s2[1]); ctx.stroke();
+      const s3 = toW(w / 2 - 17, 0), s4 = toW(w / 2 - 5, 0);
+      ctx.beginPath(); ctx.moveTo(s3[0], s3[1]); ctx.lineTo(s4[0], s4[1]); ctx.stroke();
+
+      const fPos = toW(w / 2 - 12, 0);
+      ctx.fillStyle = "#282d32";
+      ctx.beginPath(); ctx.arc(fPos[0], fPos[1], 3.5, 0, Math.PI * 2); ctx.fill();
+
+    } else if (this.kind === "open") {
+      drawPoly([p1, p2, p3, p4], "#732a20", "#41140f", 2);
+      drawPoly([toW(-w / 2 + 4, -h / 2 + 3), toW(w / 2 - 4, -h / 2 + 3), toW(w / 2 - 4, h / 2 - 3), toW(-w / 2 + 4, h / 2 - 3)], "#1a1a1c");
+
+      ctx.strokeStyle = "#5f2018"; ctx.lineWidth = 1.5;
+      for (let rx = -w / 2 + 10; rx <= w / 2 - 8; rx += 10) {
+        const rs = toW(rx, -h / 2), re = toW(rx, h / 2);
+        ctx.beginPath(); ctx.moveTo(rs[0], rs[1]); ctx.lineTo(re[0], re[1]); ctx.stroke();
+      }
+
+      ctx.fillStyle = "#28282d";
+      for (let ox = -w / 2 + 8; ox <= w / 2 - 8; ox += 8) {
+        const cx = toW(ox, 0);
+        ctx.beginPath(); ctx.arc(cx[0], cx[1], 3, 0, Math.PI * 2); ctx.fill();
+      }
+
+    } else if (this.kind === "tanker") {
+      drawPoly([p1, p2, p3, p4], "#a5afb9", "#5f6973", 2);
+      ctx.strokeStyle = "#d2dce6"; ctx.lineWidth = 4;
+      const t1 = toW(-w / 2 + 4, 3), t2 = toW(w / 2 - 4, 3);
+      ctx.beginPath(); ctx.moveTo(t1[0], t1[1]); ctx.lineTo(t2[0], t2[1]); ctx.stroke();
+
+      ctx.strokeStyle = "#4b555f"; ctx.lineWidth = 2;
+      for (let px of [-16, 16]) {
+        const bs = toW(px, -h / 2), be = toW(px, h / 2);
+        ctx.beginPath(); ctx.moveTo(bs[0], bs[1]); ctx.lineTo(be[0], be[1]); ctx.stroke();
+      }
+
+      const lPos = toW(0, 0);
+      ctx.fillStyle = "#4b555f";
+      ctx.beginPath(); ctx.arc(lPos[0], lPos[1], 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#828c96";
+      ctx.beginPath(); ctx.arc(lPos[0], lPos[1], 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    if (this.hasTailSign) {
+      const tx = toW(-w / 2 - 4, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(tx[0], tx[1], 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#e61414";
+      ctx.beginPath(); ctx.arc(tx[0], tx[1], 4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+class PassengerExpress {
+  constructor() {
+    this.active = false;
+    this.x = -1300;
+    this.speed = 270.0;
+    this.totalCars = 5;
+  }
+
+  spawn() {
+    this.active = true;
+    this.x = -950;
+  }
+
+  update(dt) {
+    if (this.active) {
+      this.x += this.speed * dt;
+      if (this.x > SCREEN_WIDTH + 1100) {
+        this.active = false;
+      }
+    }
+  }
+
+  blocksSignals() {
+    return this.active && (this.x >= -250 && this.x <= SCREEN_WIDTH + 250);
+  }
+
+  draw(ctx) {
+    if (!this.active) return;
+    const y = TRACK_Y[1];
+
+    const cx = this.x;
+    const w = 92, h = 24;
+    const tipX = cx + (w / 2 + 12);
+    const pTop = [cx + (w / 2 - 4), y + h / 2];
+    const pBot = [cx + (w / 2 - 4), y - h / 2];
+    const pRearTop = [cx - (w / 2), y + h / 2];
+    const pRearBot = [cx - (w / 2), y - h / 2];
+
+    ctx.fillStyle = "#d71e1e";
+    ctx.strokeStyle = "#870f0f";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pRearBot[0], pRearBot[1]);
+    ctx.lineTo(pRearTop[0], pRearTop[1]);
+    ctx.lineTo(pTop[0], pTop[1]);
+    ctx.lineTo(tipX, y);
+    ctx.lineTo(pBot[0], pBot[1]);
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    ctx.strokeStyle = "#f5f5fa"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(pRearBot[0], y - 5); ctx.lineTo(tipX - 3, y - 5); ctx.stroke();
+
+    ctx.fillStyle = "#192330";
+    ctx.beginPath();
+    ctx.moveTo(cx + (w / 2 - 12), y - 5);
+    ctx.lineTo(cx + (w / 2 - 12), y + 5);
+    ctx.lineTo(tipX - 7, y);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#fff5b4";
+    ctx.beginPath(); ctx.arc(tipX - 2, y - 4, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(tipX - 2, y + 4, 2.5, 0, Math.PI * 2); ctx.fill();
+
+    for (let i = 1; i < this.totalCars; i++) {
+      const carX = this.x - i * 94;
+      ctx.fillStyle = "#204898";
+      ctx.strokeStyle = "#122a5f";
+      ctx.lineWidth = 1;
+      ctx.fillRect(carX - 44, y - 12, 88, 24);
+      ctx.strokeRect(carX - 44, y - 12, 88, 24);
+
+      ctx.fillStyle = "#f0f2f8"; ctx.fillRect(carX - 44, y + 8, 88, 3);
+      ctx.fillStyle = "#c8cdd7"; ctx.fillRect(carX - 44, y - 10, 88, 2);
+
+      ctx.fillStyle = "#141e2d";
+      ctx.strokeStyle = "#b4d2f0";
+      for (let ox = carX - 36; ox <= carX + 36; ox += 12) {
+        ctx.fillRect(ox - 3.5, y - 2.5, 7, 7);
+        ctx.strokeRect(ox - 3.5, y - 2.5, 7, 7);
+      }
+    }
+  }
+}
+
+// =============================================================================
+// ГЛАВНЫЙ КЛАСС ИГРЫ
+// =============================================================================
+class StationGame {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+
+    this.keysHeld = new Set();
+    this.setupInput();
+
+    // Генерация леса (свободное место под вокзал наверху)
+    this.trees = [];
+    const zones = [
+      [0, 520, 0, 160, 45],
+      [780, SCREEN_WIDTH, 0, 160, 55],
+      [0, SCREEN_WIDTH, 540, 640, 60],
+      [0, 220, 160, 540, 35],
+      [1180, SCREEN_WIDTH, 160, 540, 40]
+    ];
+    let seed = 202;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    for (let [x1, x2, y1, y2, cnt] of zones) {
+      for (let i = 0; i < cnt; i++) {
+        const tx = x1 + rnd() * (x2 - x1);
+        const ty = y1 + rnd() * (y2 - y1);
+        if (Math.abs(tx - ROAD_X) < 45) continue;
+        const tr = 18 + rnd() * 18;
+        const g = 22 + Math.floor(rnd() * 20);
+        this.trees.push({ x: tx, y: ty, r: tr, g: g });
+      }
+    }
+
+    this.carsOnRoad = [];
+    this.carSpawnTimer = 0.5;
+
+    this.setupGame();
+  }
+
+  setupInput() {
+    window.addEventListener("keydown", (e) => {
+      this.keysHeld.add(e.code);
+      if (e.code === "KeyR" || (this.stage === 11 && (e.code === "Space" || e.code === "Enter"))) {
+        this.setupGame();
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      this.keysHeld.delete(e.code);
+    });
+
+    const bindBtn = (id, code) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const start = (ev) => { ev.preventDefault(); this.keysHeld.add(code); };
+      const end = (ev) => { ev.preventDefault(); this.keysHeld.delete(code); };
+      el.addEventListener("touchstart", start, { passive: false });
+      el.addEventListener("touchend", end, { passive: false });
+      el.addEventListener("mousedown", start);
+      el.addEventListener("mouseup", end);
+      el.addEventListener("mouseleave", end);
+    };
+
+    bindBtn("btn-left", "KeyA");
+    bindBtn("btn-brake", "Space");
+    bindBtn("btn-right", "KeyD");
+
+    const resetEl = document.getElementById("btn-reset");
+    if (resetEl) {
+      resetEl.addEventListener("click", () => this.setupGame());
+      resetEl.addEventListener("touchstart", (ev) => { ev.preventDefault(); this.setupGame(); }, { passive: false });
+    }
+  }
+
+  setupGame() {
+    this.loco = new DetailedTrainCar("loco", 3, 510);
+    this.train = [this.loco];
+    this.speed = 0.0;
+    this.maxSpeed = 150.0;
+
+    this.cars_5 = [new DetailedTrainCar("open", 5, 400), new DetailedTrainCar("open", 5, 480)];
+    this.cars_4 = [new DetailedTrainCar("tanker", 4, 400), new DetailedTrainCar("tanker", 4, 480)];
+
+    this.sigNm3 = new DwarfSignal("НМ3", 3, SWITCH_X_START[3] - 20, true);
+    this.sigM5  = new DwarfSignal("М5", 5, SWITCH_X_START[5] - 20, true);
+    this.sigM4  = new DwarfSignal("М4", 4, SWITCH_X_START[4] - 20, true);
+    this.sigM8  = new DwarfSignal("М8", 1, X_M8_POS, false);
+
+    this.express = new PassengerExpress();
+    this.crossing = new LevelCrossing(ROAD_X, TRACK_Y[1]);
+    this.worker = new InspectorWorker([650, 140]);
+    this.attendant = new StationAttendant([650, 115]); // Выходит из дверей вокзала
+
+    this.stage = 1;
+    this.isWaiting = true;
+    this.expressTimer = 2.0;
+    this.express.spawn();
+    this.status = "Пропуск пассажирского экспресса по Пути I. Ожидайте...";
+    this.alarmMsg = "";
+  }
+
+  isShuntingBeyondSignals() {
+    for (let car of this.train) {
+      if (car.x > 850) return true;
+    }
+    return false;
+  }
+
+  updateSignals() {
+    if (this.express.blocksSignals()) {
+      this.sigM5.isWhite = false;
+      this.sigNm3.isWhite = false;
+      this.sigNm3.isYellow = false;
+      this.sigM4.isWhite = false;
+      this.sigM8.isWhite = false;
+      return;
+    }
+
+    this.sigM5.isWhite  = (this.stage === 3);
+    this.sigNm3.isWhite = (this.stage === 1 || this.stage === 5);
+    this.sigNm3.isYellow = (this.stage === 10);
+    this.sigM4.isWhite  = (this.stage === 7);
+    this.sigM8.isWhite  = (this.stage === 2 || this.stage === 4 || this.stage === 6 || this.stage === 8);
+  }
+
+  update(dt) {
+    const shuntingOut = this.isShuntingBeyondSignals();
+
+    if (this.express.active) {
+      this.express.update(dt);
+    } else {
+      if (!shuntingOut && !this.isWaiting) {
+        this.expressTimer -= dt;
+        if (this.expressTimer <= 0) {
+          this.express.spawn();
+          this.expressTimer = 16.0 + Math.random() * 8.0;
+        }
+      }
+    }
+
+    this.crossing.update(dt, this.express.active, this.express.x);
+
+    // Автомобили
+    this.carSpawnTimer -= dt;
+    if (this.carSpawnTimer <= 0) {
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      this.carsOnRoad.push(new RoadCar(dir));
+      this.carSpawnTimer = 1.8 + Math.random() * 2.2;
+    }
+
+    const isBarrierClosed = this.crossing.barrierState < 0.95 || this.crossing.isClosed;
+    const carsDown = this.carsOnRoad.filter(c => c.dir === 1).sort((a, b) => b.y - a.y);
+    const carsUp   = this.carsOnRoad.filter(c => c.dir === -1).sort((a, b) => a.y - b.y);
+
+    for (let i = 0; i < carsDown.length; i++) {
+      carsDown[i].update(dt, isBarrierClosed, i > 0 ? carsDown[i - 1] : null);
+    }
+    for (let i = 0; i < carsUp.length; i++) {
+      carsUp[i].update(dt, isBarrierClosed, i > 0 ? carsUp[i - 1] : null);
+    }
+    this.carsOnRoad = this.carsOnRoad.filter(c => c.y >= -80 && c.y <= SCREEN_HEIGHT + 80);
+
+    this.attendant.update(dt);
+
+    if (this.isWaiting) {
+      if (this.stage === 1 && !this.express.active) {
+        this.isWaiting = false;
+        this.status = "Этап 1: Выезжайте с пути 3 вправо на вытяжку за М8 (НМ3 белый).";
+      } else if ([3, 5, 7].includes(this.stage) && !this.express.active) {
+        this.isWaiting = false;
+        if (this.stage === 3) this.status = "Этап 3: Вытягивайте полувагоны вправо за М8 (М5 белый).";
+        else if (this.stage === 5) this.status = "Этап 5: Снова выезжайте тепловозом вправо на вытяжку (НМ3 белый).";
+        else if (this.stage === 7) this.status = "Этап 7: Вытягивайте цистерны вправо за светофор М8 (М4 белый).";
+      }
+    }
+
+    this.updateSignals();
+    this.alarmMsg = "";
+
+    const accel = 240.0 * dt;
+    const isRight = this.keysHeld.has("ArrowRight") || this.keysHeld.has("KeyD");
+    const isLeft  = this.keysHeld.has("ArrowLeft")  || this.keysHeld.has("KeyA");
+    const isBrake = this.keysHeld.has("Space");
+
+    if (this.stage < 10) {
+      if (isRight) {
+        this.speed = Math.min(this.speed + accel, this.maxSpeed);
+      } else if (isLeft) {
+        this.speed = Math.max(this.speed - accel, -this.maxSpeed);
+      } else if (isBrake) {
+        this.speed *= Math.max(0.0, 1.0 - 5.5 * dt);
+      } else {
+        this.speed *= Math.max(0.0, 1.0 - 1.2 * dt);
+      }
+    } else {
+      this.speed = Math.min(this.speed + 110.0 * dt, 240.0);
+    }
+
+    if (this.speed > 0 && [3, 4, 5].includes(this.loco.trackId)) {
+      const xStart = SWITCH_X_START[this.loco.trackId];
+      const sigX = xStart - 20;
+      if (this.loco.x < xStart && this.loco.x + 38 >= sigX) {
+        let isOpen = false;
+        let sigName = "";
+        if (this.loco.trackId === 5) { isOpen = this.sigM5.isWhite; sigName = "М5"; }
+        else if (this.loco.trackId === 3) { isOpen = this.sigNm3.isWhite || this.sigNm3.isYellow; sigName = "НМ3"; }
+        else if (this.loco.trackId === 4) { isOpen = this.sigM4.isWhite; sigName = "М4"; }
+
+        if (!isOpen) {
+          this.loco.x = sigX - 38;
+          this.speed = 0.0;
+          this.alarmMsg = `ЗАПРЕТ: Светофор ${sigName} синий! На главном пути поезд.`;
+        }
+      }
+    }
+
+    if (this.speed < 0 && this.train[this.train.length - 1].x >= MAX_SWITCH_END) {
+      const tail = this.train[this.train.length - 1];
+      if (tail.x - 38 <= X_M8_POS && !this.sigM8.isWhite) {
+        const overlap = (X_M8_POS + 38) - tail.x;
+        this.loco.x += overlap;
+        for (let i = 1; i < this.train.length; i++) {
+          this.train[i].x = findTrailingCarX(this.train[i-1].x, this.loco.trackId, 76.0);
+        }
+        this.speed = 0.0;
+        this.alarmMsg = "ЗАПРЕТ: Светофор М8 закрыт (синий)!";
+      }
+    }
+
+    if (Math.abs(this.speed) > 1.0) {
+      this.loco.x += this.speed * dt;
+
+      const maxX = this.stage < 10 ? SCREEN_WIDTH - 45 : SCREEN_WIDTH + 350;
+      if (this.loco.x > maxX) {
+        this.loco.x = maxX;
+        if (this.speed > 0) this.speed = 0.0;
+      }
+
+      for (let i = 1; i < this.train.length; i++) {
+        this.train[i].x = findTrailingCarX(this.train[i - 1].x, this.loco.trackId, 76.0);
+        this.train[i].trackId = this.loco.trackId;
+      }
+
+      if ([3, 4, 5].includes(this.loco.trackId)) {
+        const leftmostUnit = this.train[this.train.length - 1];
+        const limitX = X_STATION_LEFT + 38;
+        if (leftmostUnit.x <= limitX) {
+          const overlap = limitX - leftmostUnit.x;
+          this.loco.x += overlap;
+          for (let i = 1; i < this.train.length; i++) {
+            this.train[i].x = findTrailingCarX(this.train[i-1].x, this.loco.trackId, 76.0);
+          }
+          if (this.speed < 0) {
+            this.speed = 0.0;
+            this.alarmMsg = "ТУПИК: Движение дальше невозможно!";
+          }
+        }
+      }
+
+      if (this.stage === 5 && this.loco.trackId === 3 && this.cars_5.length > 0) {
+        const nearestCarX = Math.max(...this.cars_5.map(c => c.x));
+        if (this.loco.x <= nearestCarX + 76) {
+          this.loco.x = nearestCarX + 76;
+          if (this.speed < 0) this.speed = 0.0;
+        }
+      }
+    }
+
+    const m8ClearX = X_M8_POS + 20;
+
+    if (this.stage === 1 && !this.isWaiting) {
+      if (this.loco.x - 38 >= m8ClearX) {
+        this.loco.trackId = 5;
+        this.stage = 2;
+      }
+    } else if (this.stage === 2) {
+      this.status = "Этап 2: Заезжайте на Путь 5 к полувагонам (М8 белый).";
+      if (this.loco.x - 37 <= this.cars_5[this.cars_5.length - 1].x + 37) {
+        this.train.push(...this.cars_5);
+        this.cars_5 = [];
+        this.speed = 0.0;
+        this.stage = 3;
+        this.isWaiting = true;
+        this.express.spawn();
+        this.status = "Сцепка выполнена. Пропуск экспресса по Пути I...";
+      }
+    } else if (this.stage === 3 && !this.isWaiting) {
+      if (this.train[this.train.length - 1].x - 38 >= m8ClearX) {
+        this.loco.trackId = 3;
+        for (let c of this.train) c.trackId = 3;
+        this.stage = 4;
+      }
+    } else if (this.stage === 4) {
+      this.status = "Этап 4: Осаживайте полувагоны на путь сборки №3.";
+      if (this.loco.x <= 510) {
+        this.loco.x = 510;
+        this.speed = 0.0;
+        this.cars_5 = this.train.slice(1);
+        this.train = [this.loco];
+        this.stage = 5;
+        this.isWaiting = true;
+        this.express.spawn();
+        this.status = "Полувагоны на пути 3. Пропуск экспресса по Пути I...";
+      }
+    } else if (this.stage === 5 && !this.isWaiting) {
+      if (this.loco.x - 38 >= m8ClearX) {
+        this.loco.trackId = 4;
+        this.stage = 6;
+      }
+    } else if (this.stage === 6) {
+      this.status = "Этап 6: Заезжайте на Путь 4 и прицепите цистерны (М8 белый).";
+      if (this.loco.x - 37 <= this.cars_4[this.cars_4.length - 1].x + 37) {
+        this.train.push(...this.cars_4);
+        this.cars_4 = [];
+        this.speed = 0.0;
+        this.stage = 7;
+        this.isWaiting = true;
+        this.express.spawn();
+        this.status = "Цистерны прицеплены. Пропуск экспресса по Пути I...";
+      }
+    } else if (this.stage === 7 && !this.isWaiting) {
+      if (this.train[this.train.length - 1].x - 38 >= m8ClearX) {
+        this.loco.trackId = 3;
+        for (let c of this.train) c.trackId = 3;
+        this.stage = 8;
+      }
+    } else if (this.stage === 8) {
+      this.status = "Этап 8: Осаживайте цистерны к полувагонам на Путь 3.";
+      const nearestCarX = Math.max(...this.cars_5.map(c => c.x));
+      const tail = this.train[this.train.length - 1];
+      if (tail.x - 76 <= nearestCarX) {
+        const overlap = nearestCarX - (tail.x - 76);
+        this.loco.x += overlap;
+        for (let i = 1; i < this.train.length; i++) {
+          this.train[i].x = findTrailingCarX(this.train[i-1].x, this.loco.trackId, 76.0);
+        }
+
+        this.cars_5.sort((a, b) => b.x - a.x);
+        this.train.push(...this.cars_5);
+        this.cars_5 = [];
+
+        for (let i = 1; i < this.train.length; i++) {
+          this.train[i].x = findTrailingCarX(this.train[i-1].x, this.loco.trackId, 76.0);
+          this.train[i].trackId = this.loco.trackId;
+        }
+
+        this.speed = 0.0;
+        this.worker.active = true;
+        this.stage = 9;
+      }
+    } else if (this.stage === 9) {
+      this.status = "Этап 9: Осмотрщик вешает хвостовой сигнал...";
+      const tail = this.train[this.train.length - 1];
+      this.worker.update(tail.x - 42, TRACK_Y[3] - 16, dt);
+      if (this.worker.finished) {
+        tail.hasTailSign = true;
+        this.attendant.active = true;
+        this.stage = 10;
+      }
+    } else if (this.stage === 10) {
+      this.status = "СВЕТОФОР НМ3 ЖЁЛТЫЙ! Дежурный по станции поднял зелёный диск. Отправление разрешено!";
+      if (this.loco.x > SCREEN_WIDTH + 200) {
+        this.stage = 11;
+      }
+    }
+  }
+
+  drawStaticScenery() {
+    const ctx = this.ctx;
+
+    // Деревья
+    for (let t of this.trees) {
+      ctx.fillStyle = "rgba(0,0,0,0.2)";
+      ctx.beginPath(); ctx.arc(t.x + 4, t.y + 4, t.r, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = `rgb(${t.g}, ${t.g + 48}, 18)`;
+      ctx.beginPath(); ctx.arc(t.x, t.y, t.r, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = `rgb(${t.g + 14}, ${t.g + 68}, 24)`;
+      ctx.beginPath(); ctx.arc(t.x - 3, t.y - 3, t.r * 0.72, 0, Math.PI * 2); ctx.fill();
+
+      ctx.fillStyle = `rgb(${t.g + 26}, ${t.g + 86}, 32)`;
+      ctx.beginPath(); ctx.arc(t.x - 6, t.y - 6, t.r * 0.45, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Автодорога
+    ctx.fillStyle = "#34363a";
+    ctx.fillRect(ROAD_X - 22, 0, 44, SCREEN_HEIGHT);
+    ctx.fillStyle = "#736955";
+    ctx.fillRect(ROAD_X - 24, 0, 4, SCREEN_HEIGHT);
+    ctx.fillRect(ROAD_X + 20, 0, 4, SCREEN_HEIGHT);
+
+    // Разметка дороги
+    ctx.strokeStyle = "#f0f0f5"; ctx.lineWidth = 2;
+    for (let ry = 0; ry < SCREEN_HEIGHT; ry += 36) {
+      if (Math.abs(ry - TRACK_Y[1]) > 32) {
+        ctx.beginPath(); ctx.moveTo(ROAD_X, ry); ctx.lineTo(ROAD_X, ry + 18); ctx.stroke();
+      }
+    }
+
+    // Стоп-линии
+    ctx.strokeStyle = "#f5f5fa"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(ROAD_X - 20, TRACK_Y[1] - 44); ctx.lineTo(ROAD_X + 20, TRACK_Y[1] - 44); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ROAD_X - 20, TRACK_Y[1] + 44); ctx.lineTo(ROAD_X + 20, TRACK_Y[1] + 44); ctx.stroke();
+
+    // Резиновый настил переезда
+    ctx.fillStyle = "#26282c";
+    ctx.fillRect(ROAD_X - 22, TRACK_Y[1] - 14, 44, 28);
+
+    // =========================================================================
+    // СТАНЦИЯ ВВЕРХУ (ВОКЗАЛ И ПЛАТФОРМА)
+    // =========================================================================
+    // 1. Здание вокзала
+    ctx.fillStyle = "#824632"; ctx.strokeStyle = "#552819"; ctx.lineWidth = 2;
+    ctx.fillRect(650 - 80, 50, 160, 75);
+    ctx.strokeRect(650 - 80, 50, 160, 75);
+
+    // Крыша
+    ctx.fillStyle = "#502314";
+    ctx.fillRect(650 - 85, 45, 170, 12);
+    // Дверь
+    ctx.fillStyle = "#2d190f";
+    ctx.fillRect(650 - 9, 95, 18, 30);
+
+    // Окна
+    ctx.fillStyle = "#b4e1f5";
+    ctx.fillRect(605 - 8, 80, 16, 14);
+    ctx.fillRect(695 - 8, 80, 16, 14);
+
+    // Вывеска "ЯКУБОВКА"
+    ctx.fillStyle = "#f0f2f5"; ctx.strokeStyle = "#282d32"; ctx.lineWidth = 1;
+    ctx.fillRect(650 - 48, 60, 96, 16);
+    ctx.strokeRect(650 - 48, 60, 96, 16);
+    ctx.fillStyle = "#14191e"; ctx.font = "bold 10px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("ЯКУБОВКА", 650, 72);
+
+    // 2. Пассажирская платформа у верхнего пути №5
+    ctx.fillStyle = "#87847d"; ctx.strokeStyle = "#5f5c58"; ctx.lineWidth = 2;
+    ctx.fillRect(650 - 110, 130, 220, 52);
+    ctx.strokeRect(650 - 110, 130, 220, 52);
+
+    // Плитка платформы
+    ctx.strokeStyle = "#787670"; ctx.lineWidth = 1;
+    for (let px = 545; px <= 755; px += 10) {
+      ctx.beginPath(); ctx.moveTo(px, 130); ctx.lineTo(px, 182); ctx.stroke();
+    }
+
+    // Скамейки
+    ctx.fillStyle = "#6e3c19";
+    ctx.fillRect(585 - 17, 145, 34, 8);
+    ctx.fillRect(715 - 17, 145, 34, 8);
+
+    // Фонарь и станционные часы
+    ctx.strokeStyle = "#282d32"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(650, 140); ctx.lineTo(650, 165); ctx.stroke();
+    ctx.fillStyle = "#fff0b4";
+    ctx.beginPath(); ctx.arc(650, 138, 4, 0, Math.PI * 2); ctx.fill();
+
+    // =========================================================================
+    // БАЛЛАСТ, ШПАЛЫ И РЕЛЬСЫ
+    // =========================================================================
+    const colBallast = "#413c37";
+    const colSleeper = "#201812";
+    const colRailShadow = "#19191c";
+    const colRailHead = "#c3c8cd";
+
+    ctx.fillStyle = colBallast;
+    for (let tid of [1, 3, 5, 4]) {
+      const y = TRACK_Y[tid];
+      if (tid === 1) {
+        ctx.fillRect(0, y - 13, SCREEN_WIDTH, 26);
+      } else {
+        const xs = SWITCH_X_START[tid];
+        const w = (xs - X_STATION_LEFT) + 40;
+        ctx.fillRect(X_STATION_LEFT - 20, y - 13, w, 26);
+      }
+    }
+    ctx.fillRect(MAX_SWITCH_END, TRACK_Y[1] - 13, SCREEN_WIDTH - MAX_SWITCH_END, 26);
+
+    for (let tid of [3, 5, 4]) {
+      const xs = SWITCH_X_START[tid];
+      const xe = SWITCH_X_END[tid];
+      for (let px = xs; px <= xe; px += 4) {
+        const py = getTrackYAndAngle(px, tid).y;
+        ctx.beginPath(); ctx.arc(px, py, 13, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    // Шпалы Пути I
+    ctx.strokeStyle = colSleeper; ctx.lineWidth = 3;
+    for (let sx = 0; sx <= SCREEN_WIDTH; sx += 11) {
+      ctx.beginPath(); ctx.moveTo(sx, TRACK_Y[1] - 11); ctx.lineTo(sx, TRACK_Y[1] + 11); ctx.stroke();
+    }
+
+    // Шпалы боковых путей
+    for (let tid of [3, 5, 4]) {
+      const y = TRACK_Y[tid];
+      const xs = SWITCH_X_START[tid];
+      const xe = SWITCH_X_END[tid];
+      for (let sx = X_STATION_LEFT; sx <= xs; sx += 11) {
+        ctx.beginPath(); ctx.moveTo(sx, y - 11); ctx.lineTo(sx, y + 11); ctx.stroke();
+      }
+      for (let px = xs; px <= xe; px += 10) {
+        const { y: py, angle } = getTrackYAndAngle(px, tid);
+        const nx = -Math.sin(angle) * 11;
+        const ny = Math.cos(angle) * 11;
+        ctx.beginPath(); ctx.moveTo(px + nx, py + ny); ctx.lineTo(px - nx, py - ny); ctx.stroke();
+      }
+    }
+
+    // Рельсы прямые
+    for (let tid of [1, 3, 5, 4]) {
+      const y = TRACK_Y[tid];
+      const x1 = tid === 1 ? 0 : X_STATION_LEFT;
+      const x2 = tid === 1 ? SCREEN_WIDTH : SWITCH_X_START[tid];
+      for (let off of [-6, 6]) {
+        ctx.strokeStyle = colRailShadow; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x1, y + off - 1); ctx.lineTo(x2, y + off - 1); ctx.stroke();
+        ctx.strokeStyle = colRailHead; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x1, y + off); ctx.lineTo(x2, y + off); ctx.stroke();
+      }
+    }
+
+    // Рельсы стрелочных переводов
+    for (let tid of [3, 5, 4]) {
+      const xs = SWITCH_X_START[tid];
+      const xe = SWITCH_X_END[tid];
+      for (let px = xs; px < xe; px += 4) {
+        const p1x = px, p2x = px + 4;
+        const { y: p1y, angle: a1 } = getTrackYAndAngle(p1x, tid);
+        const { y: p2y, angle: a2 } = getTrackYAndAngle(p2x, tid);
+        const n1x = -Math.sin(a1), n1y = Math.cos(a1);
+        const n2x = -Math.sin(a2), n2y = Math.cos(a2);
+
+        for (let sgn of [-1, 1]) {
+          ctx.strokeStyle = colRailShadow; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(p1x + n1x * 6 * sgn, p1y + n1y * 6 * sgn - 1);
+          ctx.lineTo(p2x + n2x * 6 * sgn, p2y + n2y * 6 * sgn - 1);
+          ctx.stroke();
+
+          ctx.strokeStyle = colRailHead; ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(p1x + n1x * 6 * sgn, p1y + n1y * 6 * sgn);
+          ctx.lineTo(p2x + n2x * 6 * sgn, p2y + n2y * 6 * sgn);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    // Ландшафт, пути, вокзал наверху
+    this.drawStaticScenery();
+
+    // Машины
+    for (let car of this.carsOnRoad) car.draw(ctx);
+
+    // Номера путей
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#dce1e6";
+    ctx.textAlign = "right";
+    for (let tid of [5, 3, 1, 4]) {
+      ctx.fillText(TRACK_NAMES[tid], X_STATION_LEFT - 15, TRACK_Y[tid] + 4);
+    }
+
+    // Светофоры
+    this.sigM5.draw(ctx);
+    this.sigNm3.draw(ctx);
+    this.sigM4.draw(ctx);
+    this.sigM8.draw(ctx);
+
+    // Шлагбаумы переезда
+    this.crossing.draw(ctx);
+
+    // Подвижной состав
+    for (let c of this.cars_5) c.draw(ctx);
+    for (let c of this.cars_4) c.draw(ctx);
+    for (let u of this.train) u.draw(ctx);
+
+    // Пассажирский поезд
+    this.express.draw(ctx);
+
+    // Персонал станции
+    this.worker.draw(ctx);
+    this.attendant.draw(ctx);
+
+    // Нижняя HUD-панель заданий
+    ctx.fillStyle = "rgba(16, 20, 26, 0.92)";
+    ctx.strokeStyle = "#3c4655";
+    ctx.lineWidth = 2;
+    ctx.fillRect(30, SCREEN_HEIGHT - 85, SCREEN_WIDTH - 60, 70);
+    ctx.strokeRect(30, SCREEN_HEIGHT - 85, SCREEN_WIDTH - 60, 70);
+
+    ctx.textAlign = "left";
+    ctx.font = "bold 13px sans-serif";
+    ctx.fillStyle = "#ffd700";
+    ctx.fillText(`ЗАДАНИЕ: ${this.status}`, 50, SCREEN_HEIGHT - 55);
+
+    if (this.alarmMsg) {
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillStyle = "#ff3232";
+      ctx.fillText(this.alarmMsg, 50, SCREEN_HEIGHT - 28);
+    } else {
+      ctx.font = "12px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText("[Стрелки / A, D] — Тяга  |  [Пробел] — Тормоз  |  [R] — Заново", 50, SCREEN_HEIGHT - 28);
+    }
+
+    // Экран победы
+    if (this.stage === 11) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.82)";
+      ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+      ctx.fillStyle = "#2ed573";
+      ctx.font = "bold 26px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("СТАНЦИЯ ЯКУБОВКА: СМЕНА СДАНА УСПЕШНО!", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 15);
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "16px sans-serif";
+      ctx.fillText("Нажмите [СБРОС] или [Пробел] для перезапуска смены", SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 25);
+    }
+  }
+}
+
+// Запуск
+window.addEventListener("DOMContentLoaded", () => {
+  const canvas = document.getElementById("gameCanvas");
+  const game = new StationGame(canvas);
+
+  let lastTime = performance.now();
+  function loop(currentTime) {
+    const dt = Math.min((currentTime - lastTime) / 1000.0, 0.1);
+    lastTime = currentTime;
+
+    game.update(dt);
+    game.draw();
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
