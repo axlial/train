@@ -37,13 +37,12 @@
       overflow: hidden;
     }
 
-    /* Оболочка, размер которой вычисляется математически по размеру видимого экрана */
     #canvas-wrap {
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+      box-shadow: 0 0 35px rgba(0,0,0,0.85);
       background-color: #244b16;
     }
 
@@ -54,7 +53,7 @@
     }
 
     /* =========================================================================
-       СЕНСОРНЫЙ HUD — ЗАКРЕПЛЕН ВНУТРИ ИГРОВОГО ПОЛЯ
+       ПРОЗРАЧНЫЙ СЕНСОРНЫЙ HUD В СТИЛЕ GTA MOBILE
        ========================================================================= */
     #mobile-hud {
       position: absolute;
@@ -63,47 +62,45 @@
       z-index: 50;
     }
 
-    .hud-btn {
+    /* Полупрозрачная круглая кнопка с тонкой белой окантовкой */
+    .gta-btn {
       position: relative;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       border-radius: 50%;
-      color: #ffffff;
+      background: rgba(0, 0, 0, 0.22);
+      border: 1.8px solid rgba(255, 255, 255, 0.38);
       touch-action: manipulation;
       cursor: pointer;
       pointer-events: auto;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.35);
-      transition: transform 0.06s, filter 0.1s;
+      backdrop-filter: blur(3px);
+      -webkit-backdrop-filter: blur(3px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      transition: transform 0.05s, background 0.08s, border-color 0.08s;
+      padding: 0;
     }
 
-    .hud-btn:active, .hud-btn.pressed {
-      transform: scale(0.90);
-      filter: brightness(1.3);
-    }
-
-    .btn-icon {
-      font-size: 24px;
-      line-height: 1;
-      font-weight: bold;
+    .gta-btn svg {
+      width: 55%;
+      height: 55%;
+      fill: rgba(255, 255, 255, 0.78);
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
       pointer-events: none;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+      transition: fill 0.08s;
     }
 
-    .btn-lbl {
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.5px;
-      margin-top: 2px;
-      pointer-events: none;
-      opacity: 0.95;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    /* Эффект нажатия (как в GTA) */
+    .gta-btn:active, .gta-btn.pressed {
+      transform: scale(0.92);
+      background: rgba(255, 255, 255, 0.35);
+      border-color: rgba(255, 255, 255, 0.85);
+    }
+    .gta-btn:active svg, .gta-btn.pressed svg {
+      fill: #ffffff;
     }
 
-    /* Верхние кнопки */
+    /* Верхние сервисные кнопки (Fullscreen и Restart) */
     .controls-top-left {
       position: absolute;
       top: 12px;
@@ -122,13 +119,17 @@
       width: 44px;
       height: 44px;
       border-radius: 12px;
-      background: rgba(25, 32, 45, 0.7);
-      border: 1.5px solid rgba(255, 255, 255, 0.4);
-      font-size: 20px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1.5px solid rgba(255, 255, 255, 0.3);
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* =========================================================================
-       НИЖНИЕ КНОПКИ: СТРОГО НА ОДНОЙ ГОРИЗОНТАЛЬНОЙ ЛИНИИ (bottom: 16px)
+       НИЖНИЕ КНОПКИ: СТРЕЛКИ СЛЕВА И ТОРМОЗ СПРАВА НА ОДНОМ УРОВНЕ
        ========================================================================= */
     .controls-bottom-left {
       position: absolute;
@@ -136,7 +137,7 @@
       left: 16px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 16px;
       pointer-events: auto;
     }
 
@@ -149,46 +150,44 @@
       pointer-events: auto;
     }
 
-    .btn-drive {
+    .btn-main {
       width: 72px;
       height: 72px;
-      background: rgba(22, 72, 138, 0.75);
-      border: 2px solid rgba(150, 205, 255, 0.6);
     }
 
+    /* Кнопка тормоза с легким красным оттенком */
     .btn-brake {
-      width: 72px;
-      height: 72px;
-      background: rgba(185, 28, 28, 0.78);
-      border: 2px solid rgba(255, 130, 130, 0.7);
+      background: rgba(120, 15, 15, 0.28);
+      border-color: rgba(255, 120, 120, 0.45);
+    }
+    .btn-brake svg {
+      fill: rgba(255, 180, 180, 0.85);
+    }
+    .btn-brake:active, .btn-brake.pressed {
+      background: rgba(220, 30, 30, 0.45);
+      border-color: #ffffff;
     }
 
-    /* Адаптивность для небольших высот экранов телефонов в альбоме */
+    /* Адаптивность для телефонов в альбомной ориентации */
     @media (max-height: 480px) {
       .controls-bottom-left, .controls-bottom-right {
         bottom: 10px;
       }
       .controls-bottom-left {
         left: 10px;
-        gap: 8px;
+        gap: 10px;
       }
       .controls-bottom-right {
         right: 10px;
       }
-      .btn-drive, .btn-brake {
-        width: 58px;
-        height: 58px;
-      }
-      .btn-icon {
-        font-size: 18px;
-      }
-      .btn-lbl {
-        font-size: 7.5px;
+      .btn-main {
+        width: 56px;
+        height: 56px;
       }
       .btn-top {
         width: 38px;
         height: 38px;
-        font-size: 16px;
+        font-size: 15px;
       }
     }
 
@@ -230,36 +229,38 @@
 <body>
 
 <div id="game-container">
-  <!-- Оболочка, гарантированно вписанная в экран -->
   <div id="canvas-wrap">
     <canvas id="gameCanvas" width="1380" height="720"></canvas>
 
-    <!-- Сенсорные кнопки (привязаны к углам игрового поля) -->
+    <!-- Прозрачные сенсорные кнопки в стиле GTA -->
     <div id="mobile-hud">
       <div class="controls-top-left">
-        <button class="hud-btn btn-top" id="btn-fullscreen" title="На весь экран">⛶</button>
+        <button class="gta-btn btn-top" id="btn-fullscreen" title="На весь экран">⛶</button>
       </div>
       <div class="controls-top-right">
-        <button class="hud-btn btn-top" id="btn-reset" title="Сбросить / Заново">⟲</button>
+        <button class="gta-btn btn-top" id="btn-reset" title="Сбросить / Заново">⟲</button>
       </div>
 
-      <!-- Левые кнопки движения -->
+      <!-- Стрелки движения влево/вправо -->
       <div class="controls-bottom-left">
-        <button class="hud-btn btn-drive" id="btn-left">
-          <span class="btn-icon">◀</span>
-          <span class="btn-lbl">НАЗАД</span>
+        <button class="gta-btn btn-main" id="btn-left">
+          <svg viewBox="0 0 24 24">
+            <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
+          </svg>
         </button>
-        <button class="hud-btn btn-drive" id="btn-right">
-          <span class="btn-icon">▶</span>
-          <span class="btn-lbl">ВПЕРЕД</span>
+        <button class="gta-btn btn-main" id="btn-right">
+          <svg viewBox="0 0 24 24">
+            <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+          </svg>
         </button>
       </div>
 
-      <!-- Правая кнопка тормоза (на том же уровне) -->
+      <!-- Тормоз (педаль со стоп-протектором) -->
       <div class="controls-bottom-right">
-        <button class="hud-btn btn-brake" id="btn-brake">
-          <span class="btn-icon">■</span>
-          <span class="btn-lbl">ТОРМОЗ</span>
+        <button class="gta-btn btn-main btn-brake" id="btn-brake">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 4H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-2 10H7v-2h10v2zm0-4H7V8h10v2z"/>
+          </svg>
         </button>
       </div>
     </div>
@@ -270,19 +271,18 @@
       <path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm1 18H7V5h10v14z"/>
     </svg>
     <h2 style="margin-bottom: 8px;">Поверните устройство</h2>
-    <p style="color: #9aa0a6; font-size: 14px;">Для удобной игры и широкого обзора разверните экран горизонтально (в альбомный режим).</p>
+    <p style="color: #9aa0a6; font-size: 14px;">Для удобной игры и широкого обзора разверните экран горизонтально.</p>
   </div>
 </div>
 
 <script>
 // =============================================================================
-// МАТЕМАТИЧЕСКАЯ ПОДГОНКА ЭКРАНА (ИСКЛЮЧАЕТ ВЫХОД ЗА ПРЕДЕЛЫ)
+// МАТЕМАТИЧЕСКАЯ ПОДГОНКА ЭКРАНА ПОД ЛЮБОЙ СМАРТФОН
 // =============================================================================
 function fitScreen() {
   const wrap = document.getElementById("canvas-wrap");
   if (!wrap) return;
 
-  // Точные видимые размеры окна (учитывая адресную строку и жесты Android/iOS)
   const vw = window.visualViewport ? window.visualViewport.width : window.innerWidth;
   const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
 
@@ -306,7 +306,7 @@ if (window.visualViewport) {
 }
 
 // =============================================================================
-// КОНСТАНТЫ СТАНЦИИ
+// ПАРАМЕТРЫ СТАНЦИИ
 // =============================================================================
 const SCREEN_WIDTH = 1380;
 const SCREEN_HEIGHT = 720;
@@ -317,7 +317,7 @@ const COL_YELLOW = "rgb(255, 215, 0)";
 const COL_RED = "rgb(235, 30, 30)";
 
 const TRACK_Y = {
-  5: 230,  // Путь 5 (у платформы): полувагоны
+  5: 230,  // Путь 5 (у перрона): полувагоны
   3: 315,  // Путь 3: тепловоз, сборка
   1: 400,  // Путь I: экспрессы, переезд
   4: 485   // Путь 4 (внизу): цистерны
@@ -394,7 +394,7 @@ function findTrailingCarX(leadX, trackId, targetDist = 76.0) {
 }
 
 // =============================================================================
-// МАШИНЫ НА ПЕРЕЕЗДЕ
+// МАШИНЫ НА АВТОДОРОГЕ
 // =============================================================================
 class RoadCar {
   constructor(dir) {
@@ -714,7 +714,7 @@ class DwarfSignal {
 }
 
 // =============================================================================
-// ВАГОНЫ И ТЕПЛОВОЗ
+// МАНЕВРОВЫЙ ТЕПЛОВОЗ И ГРУЗОВЫЕ ВАГОНЫ (ВИД СВЕРХУ)
 // =============================================================================
 class DetailedTrainCar {
   constructor(kind, trackId, x) {
@@ -835,6 +835,9 @@ class DetailedTrainCar {
   }
 }
 
+// =============================================================================
+// СКОРОСТНОЙ ПАССАЖИРСКИЙ ЭКСПРЕСС (ВИД СВЕРХУ / TOP-DOWN)
+// =============================================================================
 class PassengerExpress {
   constructor() {
     this.active = false;
@@ -861,68 +864,166 @@ class PassengerExpress {
     return this.active && (this.x >= -250 && this.x <= SCREEN_WIDTH + 250);
   }
 
+  // Отрисовка головного электровоза (вид сверху)
+  drawLocoTopDown(ctx, cx, cy) {
+    const w = 96, h = 24;
+
+    // Сцепки СА-3
+    ctx.strokeStyle = "#1a1a1d";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2 - 4, cy); ctx.lineTo(cx - w / 2 + 1, cy);
+    ctx.moveTo(cx + w / 2 - 1, cy); ctx.lineTo(cx + w / 2 + 5, cy);
+    ctx.stroke();
+
+    // Подвагонные тележки
+    ctx.fillStyle = "#161619";
+    for (let bx of [-w / 2 + 18, w / 2 - 18]) {
+      ctx.fillRect(bx - 10, cy - 13, 20, 26);
+    }
+
+    // Скоростной корпус электровоза (вид сверху, зауженный спереди)
+    ctx.fillStyle = "#d71e1e";
+    ctx.strokeStyle = "#800f0f";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2, cy - h / 2);
+    ctx.lineTo(cx + w / 2 - 12, cy - h / 2);
+    ctx.lineTo(cx + w / 2, cy);                     // Носовой обтекатель
+    ctx.lineTo(cx + w / 2 - 12, cy + h / 2);
+    ctx.lineTo(cx - w / 2, cy + h / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Наклонные лобовые стекла кабины машиниста (трапеция вида сверху)
+    ctx.fillStyle = "#1e293b";
+    ctx.beginPath();
+    ctx.moveTo(cx + w / 2 - 14, cy - 8);
+    ctx.lineTo(cx + w / 2 - 4, cy);
+    ctx.lineTo(cx + w / 2 - 14, cy + 8);
+    ctx.closePath();
+    ctx.fill();
+
+    // Продольный световой блик крыши
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2 + 8, cy);
+    ctx.lineTo(cx + w / 2 - 18, cy);
+    ctx.stroke();
+
+    // Блоки электрооборудования / кондиционеров на крыше
+    ctx.fillStyle = "#475569";
+    ctx.fillRect(cx - 14, cy - 7, 28, 14);
+    ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 1;
+    ctx.strokeRect(cx - 14, cy - 7, 28, 14);
+
+    // Пантографы (токоприемники / «рога» электровоза)
+    const drawPantograph = (px) => {
+      ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 1.5;
+      // Ромбовидная рама
+      ctx.beginPath();
+      ctx.moveTo(px - 7, cy); ctx.lineTo(px, cy - 5); ctx.lineTo(px + 7, cy);
+      ctx.lineTo(px, cy + 5); ctx.closePath();
+      ctx.stroke();
+      // Полоз токоприемника
+      ctx.strokeStyle = "#f8fafc"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(px, cy - 8); ctx.lineTo(px, cy + 8); ctx.stroke();
+    };
+
+    drawPantograph(cx - 30);
+    drawPantograph(cx + 26);
+
+    // Буферные фонари на носу
+    ctx.fillStyle = "#fef08a";
+    ctx.beginPath();
+    ctx.arc(cx + w / 2 - 2, cy - 5, 2, 0, Math.PI * 2);
+    ctx.arc(cx + w / 2 - 2, cy + 5, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Отрисовка пассажирского вагона (вид сверху)
+  drawCoachTopDown(ctx, cx, cy) {
+    const w = 88, h = 24;
+
+    // Межвагонная резиновая гармошка (суфле перехода)
+    ctx.fillStyle = "#111418";
+    ctx.fillRect(cx + w / 2, cy - 7, 6, 14);
+    ctx.fillRect(cx - w / 2 - 6, cy - 7, 6, 14);
+
+    // Подвагонные тележки
+    ctx.fillStyle = "#161619";
+    ctx.fillRect(cx - w / 2 + 8, cy - 13, 18, 26);
+    ctx.fillRect(cx + w / 2 - 26, cy - 13, 18, 26);
+
+    // Корпус вагона (классический синий кузов с легким закруглением торцов)
+    ctx.fillStyle = "#1e4282";
+    ctx.strokeStyle = "#0f2347";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 3);
+    ctx.fill();
+    ctx.stroke();
+
+    // Продольные ребра жесткости покатой крыши (гофры)
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.15)";
+    ctx.lineWidth = 1.2;
+    for (let off of [-7, -3, 3, 7]) {
+      ctx.beginPath();
+      ctx.moveTo(cx - w / 2 + 5, cy + off);
+      ctx.lineTo(cx + w / 2 - 5, cy + off);
+      ctx.stroke();
+    }
+
+    // Центральный блик крыши
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2 + 6, cy);
+    ctx.lineTo(cx + w / 2 - 6, cy);
+    ctx.stroke();
+
+    // Модуль кондиционирования в центре крыши
+    ctx.fillStyle = "#64748b";
+    ctx.fillRect(cx - 10, cy - 5, 20, 10);
+    ctx.strokeStyle = "#334155"; ctx.lineWidth = 1;
+    ctx.strokeRect(cx - 10, cy - 5, 20, 10);
+
+    // Круглые дефлекторы вытяжной вентиляции («грибки»)
+    ctx.fillStyle = "#94a3b8";
+    for (let vx of [-28, -18, 18, 28]) {
+      ctx.beginPath();
+      ctx.arc(cx + vx, cy, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Тамбурные разделительные швы на концах
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2 + 8, cy - h / 2); ctx.lineTo(cx - w / 2 + 8, cy + h / 2);
+    ctx.moveTo(cx + w / 2 - 8, cy - h / 2); ctx.lineTo(cx + w / 2 - 8, cy + h / 2);
+    ctx.stroke();
+  }
+
   draw(ctx) {
     if (!this.active) return;
     const y = TRACK_Y[1];
 
-    const cx = this.x;
-    const w = 92, h = 24;
-    const tipX = cx + (w / 2 + 12);
-    const pTop = [cx + (w / 2 - 4), y + h / 2];
-    const pBot = [cx + (w / 2 - 4), y - h / 2];
-    const pRearTop = [cx - (w / 2), y + h / 2];
-    const pRearBot = [cx - (w / 2), y - h / 2];
+    // 1. Головной скоростной электровоз
+    this.drawLocoTopDown(ctx, this.x, y);
 
-    ctx.fillStyle = "#d71e1e";
-    ctx.strokeStyle = "#870f0f";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(pRearBot[0], pRearBot[1]);
-    ctx.lineTo(pRearTop[0], pRearTop[1]);
-    ctx.lineTo(pTop[0], pTop[1]);
-    ctx.lineTo(tipX, y);
-    ctx.lineTo(pBot[0], pBot[1]);
-    ctx.closePath();
-    ctx.fill(); ctx.stroke();
-
-    ctx.strokeStyle = "#f5f5fa"; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.moveTo(pRearBot[0], y - 5); ctx.lineTo(tipX - 3, y - 5); ctx.stroke();
-
-    ctx.fillStyle = "#192330";
-    ctx.beginPath();
-    ctx.moveTo(cx + (w / 2 - 12), y - 5);
-    ctx.lineTo(cx + (w / 2 - 12), y + 5);
-    ctx.lineTo(tipX - 7, y);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = "#fff5b4";
-    ctx.beginPath(); ctx.arc(tipX - 2, y - 4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(tipX - 2, y + 4, 2.5, 0, Math.PI * 2); ctx.fill();
-
+    // 2. Пассажирские вагоны (вид сверху)
     for (let i = 1; i < this.totalCars; i++) {
       const carX = this.x - i * 94;
-      ctx.fillStyle = "#204898";
-      ctx.strokeStyle = "#122a5f";
-      ctx.lineWidth = 1;
-      ctx.fillRect(carX - 44, y - 12, 88, 24);
-      ctx.strokeRect(carX - 44, y - 12, 88, 24);
-
-      ctx.fillStyle = "#f0f2f8"; ctx.fillRect(carX - 44, y + 8, 88, 3);
-      ctx.fillStyle = "#c8cdd7"; ctx.fillRect(carX - 44, y - 10, 88, 2);
-
-      ctx.fillStyle = "#141e2d";
-      ctx.strokeStyle = "#b4d2f0";
-      for (let ox = carX - 36; ox <= carX + 36; ox += 12) {
-        ctx.fillRect(ox - 3.5, y - 2.5, 7, 7);
-        ctx.strokeRect(ox - 3.5, y - 2.5, 7, 7);
-      }
+      this.drawCoachTopDown(ctx, carX, y);
     }
   }
 }
 
 // =============================================================================
-// ДВИЖОК
+// ДВИЖОК СТАНЦИИ
 // =============================================================================
 class StationGame {
   constructor(canvas) {
@@ -977,7 +1078,7 @@ class StationGame {
 
       const triggerVibrate = () => {
         if ("vibrate" in navigator) {
-          try { navigator.vibrate(20); } catch (e) {}
+          try { navigator.vibrate(18); } catch (e) {}
         }
       };
 
@@ -1009,7 +1110,7 @@ class StationGame {
     if (resetEl) {
       const doReset = (ev) => {
         if (ev) ev.preventDefault();
-        if ("vibrate" in navigator) { try { navigator.vibrate(30); } catch (e) {} }
+        if ("vibrate" in navigator) { try { navigator.vibrate(28); } catch (e) {} }
         this.setupGame();
       };
       resetEl.addEventListener("click", doReset);
@@ -1518,7 +1619,9 @@ class StationGame {
     for (let c of this.cars_4) c.draw(ctx);
     for (let u of this.train) u.draw(ctx);
 
+    // Пассажирский поезд (вид сверху)
     this.express.draw(ctx);
+
     this.worker.draw(ctx);
     this.attendant.draw(ctx);
 
@@ -1532,16 +1635,16 @@ class StationGame {
     ctx.textAlign = "left";
     ctx.font = "bold 13px sans-serif";
     ctx.fillStyle = "#ffd700";
-    ctx.fillText(`ЗАДАНИЕ: ${this.status}`, 200, SCREEN_HEIGHT - 55);
+    ctx.fillText(`ЗАДАНИЕ: ${this.status}`, 190, SCREEN_HEIGHT - 55);
 
     if (this.alarmMsg) {
       ctx.font = "bold 12px sans-serif";
       ctx.fillStyle = "#ff3232";
-      ctx.fillText(this.alarmMsg, 200, SCREEN_HEIGHT - 28);
+      ctx.fillText(this.alarmMsg, 190, SCREEN_HEIGHT - 28);
     } else {
       ctx.font = "12px sans-serif";
       ctx.fillStyle = "#ffffff";
-      ctx.fillText("[Экранные кнопки / Клавиатура: A, D, Пробел, R] — Управление поездом", 200, SCREEN_HEIGHT - 28);
+      ctx.fillText("[Экранные стрелки / Клавиатура: A, D, Пробел, R] — Управление составом", 190, SCREEN_HEIGHT - 28);
     }
 
     if (this.stage === 11) {
